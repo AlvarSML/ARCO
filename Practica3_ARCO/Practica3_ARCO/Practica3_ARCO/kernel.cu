@@ -48,7 +48,6 @@ void showSpecs() {
 		printf("Unknown device type\n");
 		break;
 	}
-	printf("Hay %i nucleos\n", cores);
 	printf("\nDEVICE %d: %s\n", deviceID, deviceProp.name);
 	printf("> Capacidad de Computo \t \t: %d.%d\n", major, minor);
 	printf("> No. MultiProcesadores \t: %d \n", SM);
@@ -101,18 +100,17 @@ int getSPcores(cudaDeviceProp devProp)
 __global__ void sumaKernel(int* a, int* b, int* c)
 {
 	// El index = id del hilo en el bloque + num de hilos por bloque * nid de bloque
-
+	// Evitar que los hilos extra no entren
+	// Parametro nhilos totales
 	int i = threadIdx.x + blockDim.x * blockIdx.x;
 	a[i] = b[i] + c[i];
 }
 
 __global__ void invertirArray(int* dest, int* org, unsigned int n) {
-	//TODO: usar todos los hilos
-	// -> no usar for
+	// Evitar que los hilos extra no entren
+	// Parametro nhilos totales (if)
 	int i = threadIdx.x + blockDim.x * blockIdx.x;
-
 	dest[(n - 1) - i] = org[i];
-
 }
 
 int main()
@@ -134,7 +132,6 @@ int main()
 
 	//Mostrar caracteristicas
 	showSpecs();
-
 
 	printf("Numero de valores del vector:");
 	scanf("%i", &nthr);
