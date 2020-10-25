@@ -97,20 +97,23 @@ int getSPcores(cudaDeviceProp devProp)
 	}
 	return cores;
 }
-__global__ void sumaKernel(int* a, int* b, int* c)
+__global__ void sumaKernel(int* a, int* b, int* c, unsigned int maxThr)
 {
 	// El index = id del hilo en el bloque + num de hilos por bloque * nid de bloque
 	// Evitar que los hilos extra no entren
 	// Parametro nhilos totales
 	int i = threadIdx.x + blockDim.x * blockIdx.x;
-	a[i] = b[i] + c[i];
+
+	if (i < maxThr) a[i] = b[i] + c[i];
 }
 
 __global__ void invertirArray(int* dest, int* org, unsigned int n) {
 	// Evitar que los hilos extra no entren
 	// Parametro nhilos totales (if)
 	int i = threadIdx.x + blockDim.x * blockIdx.x;
-	dest[(n - 1) - i] = org[i];
+	// Solo si no supero el numero maximo de hilos
+	// asi se evita modificar memoria externa
+	if (i < n) dest[(n - 1) - i] = org[i];
 }
 
 int main()
@@ -137,9 +140,11 @@ int main()
 	scanf("%i", &nthr);
 
 	hst_matriz = (int*)malloc(nthr * sizeof(int));
-	cudaMallocManaged((void**)&dev_matriz, nthr * sizeof(int));
-	cudaMallocManaged((void**)&dev_resultado, nthr * sizeof(int));
-	cudaMallocManaged((void**)&dev_matriz_inver, nthr * sizeof(int));
+	// cudaMallocManaged no funciona en algunas versiones
+	// - genera una memoria unificada
+	cudaMalloc((void**)&dev_matriz, nthr * sizeof(int));
+	cudaMalloc((void**)&dev_resultado, nthr * sizeof(int));
+	cudaMalloc((void**)&dev_matriz_inver, nthr * sizeof(int));
 
 	// Obtencion del limite de bloques
 	nbloques = ceil(nthr / MAXTHR);
@@ -166,7 +171,7 @@ int main()
 	}
 	printf("\n");
 
-	sumaKernel << <nbloques, MAXTHR >> > (dev_resultado, dev_matriz_inver, dev_matriz);
+	sumaKernel << <nbloques, MAXTHR >> > (dev_resultado, dev_matriz_inver, dev_matriz,nthr);
 	cudaMemcpy(hst_matriz, dev_resultado, nthr * sizeof(int), cudaMemcpyDeviceToHost);
 
 
