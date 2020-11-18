@@ -151,10 +151,17 @@ int main(int argc, char** argv)
 	int* hst_datos, * hst_ordenado;
 	int* dev_datos, * dev_ordenado;
 
-	do {
-		printf("Numeros a ordenar(0-50): ");
-		scanf("%i", &n);
-	} while (n < 0 && n > 50);
+	// declaracion de eventos
+	cudaEvent_t start;
+	cudaEvent_t stop;
+	// creacion de eventos
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+
+	printf("Numeros a ordenar: ");
+	scanf("%i", &n);
+
 
 	hst_datos = (int*)malloc(n * sizeof(int));
 	hst_ordenado = (int*)malloc(n * sizeof(int));
@@ -163,8 +170,8 @@ int main(int argc, char** argv)
 	cudaMalloc((void**)&dev_ordenado, n * sizeof(int));
 
 	srand(time(NULL));
-	for (int i = 0; i < n;i++) {
-		hst_datos[i] = rand() % 10;
+	for (int i = 0; i < n; i++) {
+		hst_datos[i] = rand() % 51;
 		hst_ordenado[i] = 0;
 		printf("[%i]", hst_datos[i]);
 	}
@@ -172,15 +179,23 @@ int main(int argc, char** argv)
 	printf("\n");
 
 	cudaMemcpy(dev_datos, hst_datos, n * sizeof(int), cudaMemcpyHostToDevice);
-
+	// marca de inicio
+	cudaEventRecord(start, 0);
 	ordenarPorRango << <1, n >> > (dev_datos, dev_ordenado, n);
-
+	cudaEventRecord(stop, 0);
+	// sincronizacion GPU-CPU
+	cudaEventSynchronize(stop);
 	cudaMemcpy(hst_ordenado, dev_ordenado, n * sizeof(int), cudaMemcpyDeviceToHost);
 
 	for (int i = 0; i < n; i++) {
-		printf("[%i]",hst_ordenado[i]);
+		printf("[%i]", hst_ordenado[i]);
 	}
 	printf("\n");
+
+	float elapsedTime;
+	cudaEventElapsedTime(&elapsedTime, start, stop);
+	// impresion de resultados
+	printf("> Tiempo de ejecucion: %f ms\n", elapsedTime);
 
 	// SALIDA DEL PROGRAMA
 	char infoName[1024];
@@ -198,7 +213,4 @@ int main(int argc, char** argv)
 	getchar();
 	printf("<Pulsa intro para terminar>");
 	return 0;
-
-
-
 }
