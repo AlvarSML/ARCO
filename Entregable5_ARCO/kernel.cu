@@ -43,7 +43,8 @@ __global__ void ordenarPorRango(int* arrOrg, int* arrDest, int n) {
 	int myID = threadIdx.x + blockIdx.x * blockDim.x;
 	int rango = 0;
 	int valor = arrOrg[myID];
-	if (myId < n) {
+
+	if (myID < n) {
 		for (int i = 0; i < n; i++) {
 			if (valor > arrOrg[i] || (valor == arrOrg[i] && i > myID)) {
 				rango++;
@@ -116,13 +117,18 @@ double calcularCPU(int orden) {
 double calcularGPU(int orden) {
 	int len = pow(2,orden);
 	int* hst_A,* dev_A,* dev_B;
+
 	// reserva en el host
 	hst_A = (int*)malloc(len * sizeof(float));
 	cudaMalloc((void**)&dev_B, len * sizeof(int));
 	cudaMalloc((void**)&dev_A, len * sizeof(int));
 
 	// Numero de bloques
-	int bloques = ceil(len / 1024)
+	cudaDeviceProp deviceProp;
+	cudaGetDeviceProperties(&deviceProp, 0);
+	int cores = deviceProp.maxThreadsPerBlock;
+
+	int bloques = ceil(len / cores);
 
 	// declaracion de eventos
 	cudaEvent_t startDev;
@@ -139,9 +145,12 @@ double calcularGPU(int orden) {
 		hst_A[i] = rand() % 51;
 	}
 
+	cudaMemcpy(dev_A, hst_A, len * sizeof(int), cudaMemcpyHostToDevice);
+
 	cudaEventRecord(startDev, 0);
-	ordenarPorRango << <bloques, len >> > (dev_A, dev_B, len);
+	ordenarPorRango << <bloques, cores >> > (dev_A, dev_B, len);
 	cudaEventRecord(stopDev, 0);
+
 	// sincronizacion GPU-CPU
 	cudaEventSynchronize(stopDev);
 
