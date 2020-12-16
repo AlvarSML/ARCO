@@ -1,3 +1,17 @@
+
+/* * ARQUITECTURA DE COMPUTADORES
+* 2º Grado en Ingenieria Informatica
+* Curso 2020/21
+*
+* ENTREGA no.5 Rendimiento GPU vs CPU
+*
+* EQUIPO: G6 ARCO 103
+* MIEMBROS: Gonzalez Martinez Sergio
+* 	Arnaiz Lopez Lucia
+* 	 San Martin Liendo Alvar
+*
+*/ /////////////////////////////////////////////////////
+
 ///////////////////////////////////////////////////////////////////////////
 // includes
 #include <stdio.h>
@@ -5,6 +19,7 @@
 #include <cuda_runtime.h>
 #include <time.h>
 #include <math.h>
+#include <thread>  
 #ifdef __linux__
 #include <sys/time.h>
 typedef struct timeval event;
@@ -13,7 +28,7 @@ typedef struct timeval event;
 typedef LARGE_INTEGER event;
 #endif
 ///////////////////////////////////////////////////////////////////////////
-
+void hiloRango(int* arrOrg, int* arrDest, int n, int id, int nums);
 // declaracion de funciones
 // HOST: funcion llamada desde el host y ejecutada en el host
 __host__ void setEvent(event* ev)
@@ -51,7 +66,7 @@ __global__ void ordenarPorRango(int* arrOrg, int* arrDest, int n) {
 			}
 		}
 	}
-	
+
 
 	//rintf("Rango del %i = %i\n", valor, rango);
 
@@ -79,7 +94,7 @@ __host__ void ordenarPorRangoCPU(int* arrOrg, int* arrDest, int n) {
 // Orden == potencia de 2 hasta la que calcular
 double calcularCPU(int orden) {
 	int* hst_A, * hst_B;
-	
+
 	int len = pow(2, orden);
 
 	// reserva en el host
@@ -115,8 +130,8 @@ double calcularCPU(int orden) {
 
 // Orden == potencia de 2 hasta la que calcular
 double calcularGPU(int orden) {
-	int len = pow(2,orden);
-	int* hst_A,* dev_A,* dev_B;
+	int len = pow(2, orden);
+	int* hst_A, * dev_A, * dev_B;
 
 	// reserva en el host
 	hst_A = (int*)malloc(len * sizeof(float));
@@ -161,6 +176,78 @@ double calcularGPU(int orden) {
 
 }
 
+double calcularCPU_Hilos(int orden) {
+	int* hst_A, * hst_B;
+
+	int len = pow(2, orden);
+
+	// reserva en el host
+	hst_A = (int*)malloc(len * sizeof(float));
+	hst_B = (int*)malloc(len * sizeof(float));
+
+	// inicializacion
+	srand((int)time(NULL));
+	for (int i = 0; i < len; i++)
+	{
+		hst_A[i] = rand() % 51;
+	}
+
+	// La funcion eventDiff() calcula la diferencia de tiempo (en milisegundos) entre dos eventos.
+	event start; // variable para almacenar el evento de tiempo inicial.
+	event stop; // variable para almacenar el evento de tiempo final.
+	double t_ms;
+
+	const int nucleos = std::thread::hardware_concurrency();
+
+	std::thread* hilos = new std::thread[nucleos];
+
+	// de cuantos numeros se ocupa cada hilo
+	int nums = ceil((float)len / nucleos);
+
+	// Iniciamos el contador
+	setEvent(&start); // marca de evento inicial
+
+	for (int i = 0; i < nucleos; i++) {
+		hilos[i] = std::thread(hiloRango, hst_A, hst_B, len, i, nums);
+	}
+
+	for (int i = 0; i < nucleos; i++) {
+		hilos[i].join();
+	}
+
+	// Paramos el contador
+	setEvent(&stop);// marca de evento final
+	
+
+	//for (int i = 0; i < len; i++) {
+	//	printf("%i ",hst_B[i]);
+	//}
+	//printf("\n");
+
+	// Intervalos de tiempo
+	t_ms = eventDiff(&start, &stop); // diferencia de tiempo en ms
+	//printf("En CPU con %i valores tarda %lf\n", len, t_ms);
+	return t_ms;
+}
+
+void hiloRango(int* arrOrg, int* arrDest, int n, int id, int nums) {
+	int rango = 0;
+	for (int j = (id * nums); j < ((id + 1) * nums) && j < n; j++) {
+		
+		for (int i = 0; i < n; i++) {
+			if (arrOrg[j] > arrOrg[i] || (arrOrg[j] == arrOrg[i] && i > j)) {
+				rango++;
+			}
+		}
+
+		arrDest[rango] = arrOrg[j];
+		rango = 0;
+
+	}
+
+	
+}
+
 
 ///////////////////////////////////////////////////////////////////////////
 // MAIN: rutina principal ejecutada en el host
@@ -170,34 +257,46 @@ int main(int argc, char** argv)
 	const unsigned char OFFSET = 5;
 
 	printf("Hasta que potencia quieres calcular (desde 2^5 (32))[1-n]: ");
-	scanf("%i",&orden);
+	scanf("%i", &orden);
 
+	double* tiemposCPUHilos = (double*)malloc(orden * sizeof(double));
 	double* tiemposCPU = (double*)malloc(orden * sizeof(double));
 	double* tiemposGPU = (double*)malloc(orden * sizeof(double));
 
 	for (int i = 0; i < orden; i++) {
 		tiemposCPU[i] = calcularCPU((i + OFFSET));
 		tiemposGPU[i] = calcularGPU((i + OFFSET));
+		tiemposCPUHilos[i] = calcularCPU_Hilos((i + OFFSET));
 	}
+
+	/// HILOS ///
+
+	////////////
 
 	int potencia;
 
-	printf("   N   ");
+	printf("     N   ");
 	for (int i = 0; i < orden; i++) {
-		potencia = pow(2,(i + OFFSET));
-		printf("    %d    ",potencia);
+		potencia = pow(2, (i + OFFSET));
+		printf("    %d    ", potencia);
 	}
 	printf("\n");
 
-	printf("  CPU  ");
+	printf("    GPU  ");
 	for (int i = 0; i < orden; i++) {
-		printf("%.8lf ", tiemposCPU[i]);
+		printf("%3.8lf ", tiemposGPU[i]);
 	}
 	printf("\n");
 
-	printf("  GPU  ");
+	printf("    CPU  ");
 	for (int i = 0; i < orden; i++) {
-		printf("%.8lf ", tiemposGPU[i]);
+		printf("%3.8lf ", tiemposCPU[i]);
+	}
+	printf("\n");
+
+	printf("CPU+Hilos");
+	for (int i = 0; i < orden; i++) {
+		printf("%3.8lf ", tiemposCPUHilos[i]);
 	}
 	printf("\n");
 
